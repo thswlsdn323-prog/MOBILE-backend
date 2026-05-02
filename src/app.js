@@ -8,6 +8,7 @@ const errorHandler = require('./middlewares/errorHandler')
 
 // 라우터
 const authRouter = require('./routes/auth')
+const grRouter   = require('./routes/gr')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -22,6 +23,7 @@ app.use(express.urlencoded({ extended: true }))
 
 // ─── 라우터 등록 ────────────────────────────────────
 app.use('/api/auth', authRouter)
+app.use('/GR',       grRouter)
 
 // 헬스체크
 app.get('/health', (req, res) => {

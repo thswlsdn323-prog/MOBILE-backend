@@ -2,15 +2,48 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { getPool, sql } = require('../config/db')
 
+// DEV_MOCK_LOGIN=true 이면 DB 없이 누구나 로그인 가능 (테스트 전용)
+const IS_MOCK = process.env.DEV_MOCK_LOGIN === 'true'
+
+// 공통 JWT 발급
+const signToken = (payload) =>
+  jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '8h',
+  })
+
 // 로그인
 const loginService = async (userId, password) => {
+
+  // ════════════════════════════════════════════════════════
+  // [테스트 모드] DB 없이 즉시 토큰 발급
+  // ════════════════════════════════════════════════════════
+  if (IS_MOCK) {
+    console.warn('[⚠️  MOCK LOGIN] DB 검증 없이 토큰 발급 - 개발 전용!')
+
+    const payload = {
+      userId,
+      userNm: userId,
+      deptCd: 'DEV',
+      deptNm: '개발팀',
+      adminYn: 'Y',
+    }
+
+    return {
+      token: signToken(payload),
+      user: { ...payload },
+    }
+  }
+
+  // ════════════════════════════════════════════════════════
+  // [실제 모드] DB 조회 + bcrypt 검증
+  // ════════════════════════════════════════════════════════
   const pool = getPool()
 
   // 사용자 조회
   const result = await pool.request()
     .input('userId', sql.NVarChar(50), userId)
     .query(`
-      SELECT 
+      SELECT
         USER_ID,
         USER_NM,
         PASSWORD,
@@ -50,44 +83,37 @@ const loginService = async (userId, password) => {
   await pool.request()
     .input('userId', sql.NVarChar(50), userId)
     .query(`
-      UPDATE TB_USER 
-      SET LAST_LOGIN_DT = GETDATE() 
+      UPDATE TB_USER
+      SET LAST_LOGIN_DT = GETDATE()
       WHERE USER_ID = @userId
     `)
 
   // JWT 토큰 생성
-  const token = jwt.sign(
-    {
-      userId: user.USER_ID,
-      userNm: user.USER_NM,
-      deptCd: user.DEPT_CD,
-      deptNm: user.DEPT_NM,
-      adminYn: user.ADMIN_YN,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
-  )
+  const payload = {
+    userId: user.USER_ID,
+    userNm: user.USER_NM,
+    deptCd: user.DEPT_CD,
+    deptNm: user.DEPT_NM,
+    adminYn: user.ADMIN_YN,
+  }
 
   return {
-    token,
-    user: {
-      userId: user.USER_ID,
-      userNm: user.USER_NM,
-      deptCd: user.DEPT_CD,
-      deptNm: user.DEPT_NM,
-      adminYn: user.ADMIN_YN,
-    },
+    token: signToken(payload),
+    user: { ...payload },
   }
 }
 
 // 내 정보 조회
 const getMeService = async (userId) => {
+  // 테스트 모드: req.user 에서 이미 페이로드 가지고 있으므로 컨트롤러에서 처리
+  if (IS_MOCK) return null
+
   const pool = getPool()
 
   const result = await pool.request()
     .input('userId', sql.NVarChar(50), userId)
     .query(`
-      SELECT 
+      SELECT
         USER_ID,
         USER_NM,
         DEPT_CD,

@@ -21,6 +21,11 @@ const logout = async (req, res) => {
 
 // GET /api/auth/me
 const getMe = async (req, res) => {
+  // 테스트 모드: JWT 페이로드 그대로 반환
+  if (process.env.DEV_MOCK_LOGIN === 'true') {
+    return res.json(req.user)
+  }
+
   const user = await getMeService(req.user.userId)
   if (!user) {
     return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' })
